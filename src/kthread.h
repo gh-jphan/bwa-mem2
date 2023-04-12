@@ -60,6 +60,7 @@ typedef struct ktp_t {
 	int (*func)(void*);
 	int64_t index;
 	int n_workers, n_steps;
+	int64_t *n_processed;  // num seqs processed per pipeline thread
 	ktp_worker_t *workers;
 	pthread_mutex_t mutex;
 	pthread_cond_t cv;
@@ -85,6 +86,6 @@ typedef struct kt_for_t {
 } kt_for_t;
 
 
-void kt_pipeline(int n_threads, int (*func)(void*), void *shared_data, int n_steps);
+void kt_pipeline(int n_threads, int (*func)(void*), void *shared_data, int n_steps, ktp_worker_t* worker_data);
 void kt_for(void (*func)(void*,int,int,int), void *data, int n);
 #endif
