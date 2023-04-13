@@ -1300,7 +1300,7 @@ void mem_process_seqs(mem_opt_t *opt,
     tim = __rdtsc();
     fprintf(stderr, "[0000] 3. Calling kt_for - worker_sam\n");
     
-    kt_for(worker_sam, &w,  n_);   // SAM   
+    kt_for(worker_sam, &w, n_);   // SAM   
     tprof[WORKER20][0] += __rdtsc() - tim;
 
     fprintf(stderr, "\t[0000][ M::%s] Processed %d reads in %.3f "

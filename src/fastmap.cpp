@@ -183,7 +183,8 @@ void memoryAlloc(ktp_aux_t *aux, worker_t &w, int32_t nreads, int32_t nthreads)
     fprintf(stderr, "------------------------------------------\n");
 }
 
-ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, worker_t &w)
+// ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, worker_t &w)
+ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, worker_t &w, ktp_worker_t* worker_data)
 {
     ktp_aux_t *aux = (ktp_aux_t*) shared;
     ktp_data_t *ret = (ktp_data_t*) data;
@@ -222,6 +223,17 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
 
             fprintf(stderr, "\t[0000][ M::%s] read %d sequences (%ld bp)...\n",
                     __func__, ret->n_seqs, (long)size);
+
+            /*
+            int pthread_ret = pthread_mutex_lock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            for (int i=0; i < ret->n_seqs; ++i) {
+              fprintf(stderr, "[1111] read seq: %s\n", ret->seqs[i].name);
+            }
+            pthread_ret = pthread_mutex_unlock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            */
+
         }
                 
         return ret;
@@ -258,7 +270,8 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
                 tmp_opt.flag &= ~MEM_F_PE;
                 /* single-end sequences, in the mixture */
                 mem_process_seqs(&tmp_opt,
-                                 aux->n_processed,
+                                 //aux->n_processed,
+                                 worker_data->pl->n_processed[worker_data->i],
                                  n_sep[0],
                                  sep[0],
                                  0,
@@ -271,7 +284,8 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
                 tmp_opt.flag |= MEM_F_PE;
                 /* paired-end sequences, in the mixture */
                 mem_process_seqs(&tmp_opt,
-                                 aux->n_processed + n_sep[0],
+                                 //aux->n_processed + n_sep[0],
+                                 worker_data->pl->n_processed[worker_data->i] + n_sep[0],
                                  n_sep[1],
                                  sep[1],
                                  aux->pes0,
@@ -284,12 +298,36 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
         }
         else {
             /* pure (single/paired-end), reads processing */
+
+            /*
+            int pthread_ret = pthread_mutex_lock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            fprintf(stderr, "[2222] batch size: %d\n", ret->n_seqs);
+            for (int i=0; i<ret->n_seqs; ++i) {
+              fprintf(stderr, "[2222] processing seq: %s\n", ret->seqs[i].name);
+            }
+            pthread_mutex_unlock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            */
+
             mem_process_seqs(opt,
-                             aux->n_processed,
+                             //aux->n_processed,
+                             worker_data->pl->n_processed[worker_data->i],
                              ret->n_seqs,
                              ret->seqs,
                              aux->pes0,
                              w);
+
+            /*
+            pthread_ret = pthread_mutex_lock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            for (int i=0; i<ret->n_seqs; ++i) {
+              fprintf(stderr, "[2222] processing seq: %s\n", ret->seqs[i].name);
+            }
+            pthread_mutex_unlock(&worker_data->pl->mutex);
+            assert(pthread_ret == 0);
+            */
+
         }               
         tprof[MEM_PROCESS2][0] += __rdtsc() - tim;
                 
@@ -298,7 +336,19 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
     /* Step 3: Write output */
     else if (step == 2)
     {
+
+        /*
+        int pthread_ret = pthread_mutex_lock(&worker_data->pl->mutex);
+        assert(pthread_ret == 0);
+        for (int i=0; i<ret->n_seqs; ++i) {
+          fprintf(stderr, "[3333] writing seq: %s\n", ret->seqs[i].name);
+        }
+        pthread_mutex_unlock(&worker_data->pl->mutex);
+        assert(pthread_ret == 0);
+        */
+
         aux->n_processed += ret->n_seqs;
+        worker_data->pl->n_processed[worker_data->i] += ret->n_seqs;
         uint64_t tim = __rdtsc();
 
         for (int i = 0; i < ret->n_seqs; ++i)
@@ -321,6 +371,122 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
     return 0;
 }
 
+static int exit_state(ktp_t* p)
+{
+    int exit = 1;
+    for (int i=0; i<p->n_workers; ++i)
+        if (p->workers[i].step != p->n_steps) {
+            exit = 0;
+            break;
+        }
+    return exit;
+}
+
+static int valid_state(ktp_t* p)
+{
+    // return 1 if all worker steps are in a valid state
+    int next_valid_val;
+    bool next_end_ok;
+    for (int i=0; i<p->n_workers; ++i) {
+        if (p->workers[i].step == p->n_steps) {
+            next_valid_val = 0;
+            next_end_ok = true;
+        } else if (p->workers[i].step == -1) {
+            next_valid_val = -1;
+            next_end_ok = false;
+        } else {
+            next_valid_val = p->workers[i].step - 1;
+            if (p->workers[i].step >= 1) {
+                next_end_ok = true;
+            } else {
+                next_end_ok = false;
+            }
+        }
+        if (i == 0) continue;  // skip first worker
+        if (
+            p->workers[i].step != next_valid_val
+            && !(next_end_ok && p->workers[i].step == p->n_steps)
+        ) {
+            // invalid state
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int transition_state(ktp_t* p, int worker_id)
+{
+    // assume that the state is valid
+    if (p->workers[worker_id].step == -1) {
+        if (worker_id == 0) return 1;
+        if (p->workers[worker_id-1].step == 0) return 1;
+        return 0;
+    } else if (p->workers[worker_id].step == p->n_steps) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int check_state(ktp_t* p, int wid)
+{
+  int step0 = p->workers[0].step;
+  int step1 = p->workers[1].step;
+  int transition = 0;
+
+  if (step0 == 0 && step1 == 0 && wid == 0)
+    transition = 1;
+  if (step0 == 1 && step1 == 0)
+    transition = 1;
+  if (step0 == 2 && step1 == 1)
+    transition = 1;
+  if (step0 == 0 && step1 == 2)
+    transition = 1;
+  if (step0 == 3 && step1 == 0 && wid == 1)
+    transition = 1;
+  if (step0 == 3 && step1 == 3)
+    transition = 2;
+
+  fprintf(stderr, "[####] Current state: (%d, %d), thread: %d, trans: %d\n", step0, step1, wid, transition);
+
+  return transition;
+}
+
+
+static void *ktp_worker(void *data)
+{
+    ktp_worker_t *w = (ktp_worker_t*) data;
+    ktp_t *p = w->pl;
+
+    while (1) {
+        // test whether we can kick off the job with this worker
+        int pthread_ret = 0;
+
+        pthread_ret = pthread_barrier_wait(&p->pre_barrier);
+        assert(pthread_ret == PTHREAD_BARRIER_SERIAL_THREAD || pthread_ret == 0);
+
+        assert(valid_state(p) == 1);
+        if (exit_state(p)) pthread_exit(0);
+        int transition = transition_state(p, w->i);
+
+        pthread_ret = pthread_barrier_wait(&p->post_barrier);
+        assert(pthread_ret == PTHREAD_BARRIER_SERIAL_THREAD || pthread_ret == 0);
+
+        if (!transition) {
+            fprintf(stderr, "[####] Waiting for next state\n");
+            continue;
+        }
+
+        int step = (w->step + 1) % p->n_steps;
+        w->data = kt_pipeline(p->shared, step, step? w->data : 0, w->opt, *(w->w), w); // for the first step, input is NULL
+
+        // update step
+        w->step = w->step == p->n_steps - 1 || w->data? step : p->n_steps;
+        if (w->step == 0) w->index = p->index++;
+    }
+}
+
+/*
 static void *ktp_worker(void *data)
 {   
     ktp_worker_t *w = (ktp_worker_t*) data;
@@ -346,7 +512,11 @@ static void *ktp_worker(void *data)
         assert(pthread_ret == 0);
 
         // working on w->step
-        w->data = kt_pipeline(p->shared, w->step, w->step? w->data : 0, w->opt, *(w->w)); // for the first step, input is NULL
+        // pthread_ret = pthread_mutex_lock(&p->mutex);
+        // assert(pthread_ret == 0);
+        w->data = kt_pipeline(p->shared, w->step, w->step? w->data : 0, w->opt, *(w->w), w); // for the first step, input is NULL
+        // pthread_ret = pthread_mutex_unlock(&p->mutex);
+        // assert(pthread_ret == 0);
 
         // update step and let other workers know
         pthread_ret = pthread_mutex_lock(&p->mutex);
@@ -361,6 +531,7 @@ static void *ktp_worker(void *data)
     }
     pthread_exit(0);
 }
+*/
 
 static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
 {
@@ -430,7 +601,7 @@ static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
                     fgets(ch, 10, fp);
                     v = sscanf(ch, "%u,%u",&a,&b);
                     if (v == 1) v = sscanf(ch, "%u-%u",&a,&b);
-                    if (v == 1) {
+    if (v == 1) {
                         fprintf(stderr, "Mis-match between HT and threads_sibling_list...%s\n", ch);
                         fprintf(stderr, "Continuing with default affinity settings..\n");
                         break;
@@ -444,7 +615,7 @@ static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
             for (int i=0; i<num_total_logical_cpus; i++) {
                 if (slookup[i] == -1) {
                     fprintf(stderr, "Unseen cpu topology..\n");
-                    break;
+                    break;                }
                 }
                 if (slookup[i] == 1) affy[a++] = i;
                 else affy[b++] = i;
@@ -473,9 +644,17 @@ static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
     aux_.n_steps = n_steps;
     aux_.shared = aux;
     aux_.index = 0;
+    aux_.n_processed = (int64_t *) calloc(p_nt, sizeof(int64_t));
+
     int pthread_ret = pthread_mutex_init(&aux_.mutex, 0);
     assert(pthread_ret == 0);
     pthread_ret = pthread_cond_init(&aux_.cv, 0);
+    assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_init(&aux_.pre_barrier, 0, 2);
+    assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_init(&aux_.post_barrier, 0, 2);
+    assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_init(&aux_.work_barrier, 0, 2);
     assert(pthread_ret == 0);
 
     fprintf(stderr, "* No. of pipeline threads: %d\n\n", p_nt);
@@ -484,7 +663,7 @@ static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
     
     for (int i = 0; i < p_nt; ++i) {
         ktp_worker_t *wr = &aux_.workers[i];
-        wr->step = 0; wr->pl = &aux_; wr->data = 0;
+        wr->step = -1; wr->pl = &aux_; wr->data = 0;
         wr->index = aux_.index++;
         wr->i = i;
         wr->opt = opt;
@@ -504,9 +683,16 @@ static int process(void *shared, gzFile gfp, gzFile gfp2, int pipe_threads)
     assert(pthread_ret == 0);
     pthread_ret = pthread_cond_destroy(&aux_.cv);
     assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_destroy(&aux_.pre_barrier);
+    assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_destroy(&aux_.post_barrier);
+    assert(pthread_ret == 0);
+    pthread_ret = pthread_barrier_destroy(&aux_.work_barrier);
+    assert(pthread_ret == 0);
 
     free(ptid);
     free(aux_.workers);
+    free(aux_.n_processed);
     /***** pipeline ends ******/
     
     fprintf(stderr, "[0000] Computation ends..\n");

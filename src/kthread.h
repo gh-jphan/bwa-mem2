@@ -60,9 +60,13 @@ typedef struct ktp_t {
 	int (*func)(void*);
 	int64_t index;
 	int n_workers, n_steps;
+  int64_t *n_processed;  // num seqs processed per pipeline thread
 	ktp_worker_t *workers;
 	pthread_mutex_t mutex;
 	pthread_cond_t cv;
+  pthread_barrier_t pre_barrier;
+  pthread_barrier_t post_barrier;
+  pthread_barrier_t work_barrier;
 } ktp_t;
 
 // ---------------
