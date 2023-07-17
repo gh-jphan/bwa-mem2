@@ -167,7 +167,7 @@ bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_, void *ks2_,
     return seqs;
 }
 
-bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, uint32_t *max_read_length, int64_t *s, uint32_t)
+bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, uint32_t *max_read_length, int64_t *s)
 {
     kseq_t *ks = (kseq_t*)ks1_, *ks2 = (kseq_t*)ks2_;
     *max_read_length = 0;
@@ -223,7 +223,8 @@ bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, uin
 bseq1_t *bseq_read_one_fasta_file(int64_t chunk_size, int *n_, gzFile fp, int64_t *s)
 {
     kseq_t *ks = kseq_init(fp);
-    bseq1_t *seq = bseq_read_orig(chunk_size, n_, ks, NULL, s);
+    uint32_t max_read_length = 0;
+    bseq1_t *seq = bseq_read_orig(chunk_size, n_, ks, NULL, &max_read_length, s);
     kseq_destroy(ks);
     return seq;
 }

@@ -101,7 +101,6 @@ void memoryAlloc(ktp_aux_t *aux, worker_t &w, int32_t nreads, int32_t nthreads)
 {
     mem_opt_t *opt = aux->opt;  
     int32_t memSize = nreads;
-    int32_t readLen = READ_LEN;
 
     /* Mem allocation section for core kernels */
     w.regs = NULL; w.chain_ar = NULL; w.seedBuf = NULL;
@@ -165,7 +164,7 @@ void memoryAlloc(ktp_aux_t *aux, worker_t &w, int32_t nreads, int32_t nthreads)
 
     for (int l=0; l<nthreads; l++)
     {
-        w.mmc.wsize_mem[l]     = BATCH_MUL * BATCH_SIZE *               readLen;
+        w.mmc.wsize_mem[l]     = BATCH_MUL * BATCH_SIZE * READ_LEN;  // re-allocated if necessary
         w.mmc.matchArray[l]    = (SMEM *) _mm_malloc(w.mmc.wsize_mem[l] * sizeof(SMEM), 64);
         w.mmc.min_intv_ar[l]   = (int32_t *) malloc(w.mmc.wsize_mem[l] * sizeof(int32_t));
         w.mmc.query_pos_ar[l]  = (int16_t *) malloc(w.mmc.wsize_mem[l] * sizeof(int16_t));
@@ -174,10 +173,10 @@ void memoryAlloc(ktp_aux_t *aux, worker_t &w, int32_t nreads, int32_t nthreads)
         w.mmc.lim[l]           = (int32_t *) _mm_malloc((BATCH_SIZE + 32) * sizeof(int32_t), 64); // candidate not for reallocation, deferred for next round of changes.
     }
 
-    allocMem = nthreads * BATCH_MUL * BATCH_SIZE * readLen * sizeof(SMEM) +
-        nthreads * BATCH_MUL * BATCH_SIZE * readLen *sizeof(int32_t) +
-        nthreads * BATCH_MUL * BATCH_SIZE * readLen *sizeof(int16_t) +
-        nthreads * BATCH_MUL * BATCH_SIZE * readLen *sizeof(int32_t) +
+    allocMem = nthreads * BATCH_MUL * BATCH_SIZE * READ_LEN * sizeof(SMEM) +
+        nthreads * BATCH_MUL * BATCH_SIZE * READ_LEN *sizeof(int32_t) +
+        nthreads * BATCH_MUL * BATCH_SIZE * READ_LEN *sizeof(int16_t) +
+        nthreads * BATCH_MUL * BATCH_SIZE * READ_LEN *sizeof(int32_t) +
         nthreads * (BATCH_SIZE + 32) * sizeof(int32_t);
     fprintf(stderr, "3. Memory pre-allocation for BWT: %0.4lf MB\n", allocMem/1e6);
     fprintf(stderr, "------------------------------------------\n");
@@ -204,8 +203,8 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
 
         tprof[READ_IO][0] += __rdtsc() - tim;
         
-        fprintf(stderr, "[0000] read_chunk: %ld, work_chunk_size: %ld, nseq: %d\n",
-                aux->task_size, sz, ret->n_seqs);   
+        fprintf(stderr, "[0000] read_chunk: %ld, work_chunk_size: %ld, nseq: %d, max_read_length: %d\n",
+                aux->task_size, sz, ret->n_seqs, ret->max_read_length);
 
         if (ret->seqs == 0) {
             free(ret);
@@ -239,8 +238,11 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
             w.chain_ar = (mem_chain_v*) malloc (w.nreads * sizeof(mem_chain_v));
             w.seedBuf = (mem_seed_t *) calloc(sizeof(mem_seed_t), w.nreads * AVG_SEEDS_PER_READ);
             assert(w.regs != NULL); assert(w.chain_ar != NULL); assert(w.seedBuf != NULL);
-        }       
-                                
+        }
+
+        // keep track of max read length in worker thread
+        w.max_read_length = ret->max_read_length;
+
         fprintf(stderr, "[0000] Calling mem_process_seqs.., task: %d\n", task++);
 
         uint64_t tim = __rdtsc();

@@ -216,6 +216,7 @@ typedef struct worker_t {
     const mem_pestat_t   *pes;
     smem_aux_t      **aux;
     bseq1_t          *seqs;
+    uint32_t         max_read_length;
     mem_alnreg_v     *regs;
     int64_t           n_processed;
     mem_chain_v      *chain_ar;

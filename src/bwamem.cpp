@@ -929,12 +929,13 @@ int mem_kernel1_core(FMI_search *fmi,
 
     if (max_read_length > READ_LEN) {
       // check if we need to reallocate due to longer than expected read lengths
+      fprintf(stderr, "[%0.4d] Max read length of %ld greater than expected %ld\n", max_read_length, READ_LEN);
       int64_t tot_len_reads = BATCH_MUL * BATCH_SIZE * max_read_length;
       tot_len = (tot_len_reads > tot_len) ? tot_len_reads : tot_len;
     }
 
     // This covers enc_qdb/SMEM and read length reallocs
-    if (tot_len >= mmc->wsize_mem[tid])
+    if (tot_len > mmc->wsize_mem[tid])
     {
         fprintf(stderr, "[%0.4d] Re-allocating SMEM data structures due to enc_qdb or max_read_length\n", tid);
         int64_t tmp = mmc->wsize_mem[tid];
@@ -1763,7 +1764,7 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 void* _mm_realloc(void *ptr, int64_t csize, int64_t nsize, int16_t dsize) {
     if (nsize <= csize)
     {
-        fprintf(stderr, "Shringking not supported yet.\n");
+        fprintf(stderr, "Shrinking not supported yet.\n");
         return ptr;
     }
     void *nptr = _mm_malloc(nsize * dsize, 64);
