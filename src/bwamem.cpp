@@ -929,7 +929,6 @@ int mem_kernel1_core(FMI_search *fmi,
 
     if (max_read_length > READ_LEN) {
       // check if we need to reallocate due to longer than expected read lengths
-      fprintf(stderr, "[%0.4d] Max read length of %ld greater than expected %ld\n", max_read_length, READ_LEN);
       int64_t tot_len_reads = BATCH_MUL * BATCH_SIZE * max_read_length;
       tot_len = (tot_len_reads > tot_len) ? tot_len_reads : tot_len;
     }
