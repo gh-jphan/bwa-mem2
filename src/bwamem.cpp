@@ -974,7 +974,7 @@ int mem_kernel1_core(FMI_search *fmi,
                      num_smem);
 
     if (num_smem >= *wsize_mem){
-        fprintf(stderr, "Error [bug]: num_smem: %ld are more than allocated space of  %ld.\n", num_smem, *wsize_mem);
+        fprintf(stderr, "Error [bug]: num_smem: %ld is more than allocated space of %ld.\n", num_smem, *wsize_mem);
         exit(EXIT_FAILURE);
     }
     printf_(VER, "6. Done! mem_collect_smem, num_smem: %ld\n", num_smem);
