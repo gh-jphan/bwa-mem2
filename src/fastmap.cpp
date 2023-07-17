@@ -199,6 +199,7 @@ ktp_data_t *kt_pipeline(void *shared, int step, void *data, mem_opt_t *opt, work
         ret->seqs = bseq_read_orig(aux->task_size,
                                    &ret->n_seqs,
                                    aux->ks, aux->ks2,
+                                    &ret->max_read_length,
                                    &sz);
 
         tprof[READ_IO][0] += __rdtsc() - tim;

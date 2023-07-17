@@ -262,6 +262,7 @@ static inline int infer_bw(int l1, int l2, int score, int a, int q, int r);
 int mem_kernel1_core(FMI_search *fmi, const mem_opt_t *opt,
                      bseq1_t *seq_,
                      int nseq,
+                     uint32_t max_read_length,
                      mem_chain_v *chain_ar,
                      mem_cache *mmc,
                      int tid);

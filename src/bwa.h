@@ -67,7 +67,7 @@ extern char bwa_rg_id[256];
 #ifdef __cplusplus
 extern "C" {
 #endif
-    bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, int64_t *s);
+    bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, uint32_t *max_read_length, int64_t *s);
 
     bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_,
                        void *ks2_, FILE* fpp, int len,

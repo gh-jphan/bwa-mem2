@@ -167,9 +167,10 @@ bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_, void *ks2_,
     return seqs;
 }
 
-bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, int64_t *s)
+bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, uint32_t *max_read_length, int64_t *s, uint32_t)
 {
     kseq_t *ks = (kseq_t*)ks1_, *ks2 = (kseq_t*)ks2_;
+    *max_read_length = 0;
     int64_t size = 0, m, n;
     bseq1_t *seqs;
     m = n = 0; seqs = 0;
@@ -185,6 +186,10 @@ bseq1_t *bseq_read_orig(int64_t chunk_size, int *n_, void *ks1_, void *ks2_, int
         }
         trim_readno(&ks->name);
         kseq2bseq1(ks, &seqs[n]);
+        if (*max_read_length < seqs[n].l_seq) {
+          // keep track of max read length for this chunk
+          *max_read_length = seqs[n].l_seq;
+        }
         seqs[n].id = n;
         //{
         //  size += strlen(seqs[n].name);
