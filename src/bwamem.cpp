@@ -664,6 +664,9 @@ SMEM *mem_collect_smem(FMI_search *fmi, const mem_opt_t *opt,
                                  matchArray, &num_smem1);
 
 
+    // num_smem1 = num reads * num reads * (read len + 1)
+    fprintf(stderr, "num_smem1: %d\n", num_smem1);
+
     for (int64_t i=0; i<num_smem1; i++)
     {
         SMEM *p = &matchArray[i];
@@ -696,17 +699,27 @@ SMEM *mem_collect_smem(FMI_search *fmi, const mem_opt_t *opt,
                                  matchArray + num_smem1,
                                  &num_smem2);
 
+    // num_smem2 = num_smem1 * (read length + 1)
+    fprintf(stderr, "num_smem2: %d\n", num_smem2);
+
     if (opt->max_mem_intv > 0)
     {
         for (int l=0; l<nseq; l++)
-            min_intv_ar[l] = opt->max_mem_intv;
+          min_intv_ar[l] = opt->max_mem_intv;
 
         num_smem3 = fmi->bwtSeedStrategyAllPosOneThread(enc_qdb, min_intv_ar,
                                                         nseq, seq_, query_cum_len_ar, 
                                                         opt->min_seed_len + 1,
                                                         matchArray + num_smem1 + num_smem2);        
+
+        // num_smem3 = num reads * read length
+        fprintf(stderr, "num_smem3: %d\n", num_smem3);
     }
     tot_smem = num_smem1 + num_smem2 + num_smem3;
+
+    // tot_smem = num_reads + num_reads * (read_length + 1) + num_reads * read_length
+    //          = num_reads * (1 + read_length + 1 + read_length)
+    //          = num_reads * (2*read_length + 1)
 
     fmi->sortSMEMs(matchArray, &tot_smem, nseq, seq_[0].l_seq, 1); // seq_[0].l_seq - only used for blocking when using nthreads
 
@@ -965,8 +978,22 @@ int mem_kernel1_core(FMI_search *fmi,
                      rid,
                      num_smem);
 
+    for (int iseq=0; iseq<nseq; iseq++) {
+      for (int seql=0; seql<seq_[iseq].l_seq; seql++) {
+        fprintf(stderr, "%d", seq_[iseq].seq[seql]);
+      }
+      fprintf(stderr, "\n");
+    }
+    exit(EXIT_FAILURE);
+
     if (num_smem >= *wsize_mem){
-        fprintf(stderr, "Error [bug]: num_smem: %ld are more than allocated space.\n", num_smem);
+        fprintf(stderr, "Error [bug]: num_smem: %ld are more than allocated space of %ld.\n", num_smem, *wsize_mem);
+        for (int iseq=0; iseq<nseq; iseq++) {
+          for (int seql=0; seql<seq_[iseq].l_seq; seql++) {
+            fprintf(stderr, "%d", seq_[iseq].seq[seql]);
+          }
+          fprintf(stderr, "\n");
+        }
         exit(EXIT_FAILURE);
     }
     printf_(VER, "6. Done! mem_collect_smem, num_smem: %ld\n", num_smem);

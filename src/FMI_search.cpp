@@ -507,6 +507,7 @@ void FMI_search::getSMEMsOnePosOneThread(uint8_t *enc_qdb,
                                          int64_t *__numTotalSmem)
 {
     int64_t numTotalSmem = *__numTotalSmem;
+    //fprintf(stderr, "initial val %ld\n", numTotalSmem);
     SMEM prevArray[max_readlength];
 
     uint32_t i;
@@ -615,6 +616,7 @@ void FMI_search::getSMEMsOnePosOneThread(uint8_t *enc_qdb,
                         cur_j = j;
 
                         matchArray[numTotalSmem++] = smem;
+                        //fprintf(stderr, "first %ld\n", numTotalSmem);
                         break;
                     }
                     if((newSmem.s >= min_intv_array[i]) && (newSmem.s != curr_s))
@@ -660,6 +662,7 @@ void FMI_search::getSMEMsOnePosOneThread(uint8_t *enc_qdb,
                 {
 
                     matchArray[numTotalSmem++] = smem;
+                    //fprintf(stderr, "second %ld\n", numTotalSmem);
                 }
                 numPrev = 0;
             }
